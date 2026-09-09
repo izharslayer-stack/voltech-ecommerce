@@ -66,7 +66,7 @@ export default function CheckoutPage() {
     setLoading(true);
     await new Promise((r) => setTimeout(r, 1200));
 
-    const order = createOrder({
+    const order = await createOrder({
       items,
       customer: { name: form.fullName, email: form.email, phone: form.phone },
       shipping: { address: form.address, city: form.city, state: form.state, postalCode: form.postalCode, country: form.country },

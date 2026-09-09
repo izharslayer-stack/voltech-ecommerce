@@ -1,0 +1,131 @@
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["driverAdapters"]
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model Customer {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  firstName    String   @map("first_name")
+  lastName     String   @map("last_name")
+  passwordHash String   @map("password_hash")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+  orders       Order[]
+  carts        Cart[]
+
+  @@map("customers")
+}
+
+model AdminUser {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  name         String
+  passwordHash String   @map("password_hash")
+  avatar       String?
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  @@map("admin_users")
+}
+
+model Product {
+  id              String      @id
+  name            String
+  slug            String      @unique
+  category        String
+  price           Decimal     @db.Decimal(10, 2)
+  originalPrice   Decimal?    @map("original_price") @db.Decimal(10, 2)
+  description     String      @default("")
+  longDescription String?     @map("long_description")
+  image           String      @default("")
+  images          String[]    @default([])
+  stock           Int         @default(0)
+  sku             String?
+  rating          Decimal?    @db.Decimal(3, 2)
+  featured        Boolean     @default(false)
+  status          String      @default("active")
+  createdAt       DateTime    @default(now()) @map("created_at")
+  updatedAt       DateTime    @updatedAt @map("updated_at")
+  cartItems       CartItem[]
+  orderItems      OrderItem[]
+
+  @@index([slug])
+  @@index([category])
+  @@index([featured])
+  @@index([status])
+  @@map("products")
+}
+
+model Cart {
+  id         String     @id @default(cuid())
+  customerId String?    @map("customer_id")
+  sessionId  String?    @map("session_id")
+  createdAt  DateTime   @default(now()) @map("created_at")
+  updatedAt  DateTime   @updatedAt @map("updated_at")
+  customer   Customer?  @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  items      CartItem[]
+
+  @@map("carts")
+}
+
+model CartItem {
+  id        String   @id @default(cuid())
+  cartId    String   @map("cart_id")
+  productId String   @map("product_id")
+  quantity  Int      @default(1)
+  addedAt   DateTime @default(now()) @map("added_at")
+  cart      Cart     @relation(fields: [cartId], references: [id], onDelete: Cascade)
+  product   Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@unique([cartId, productId])
+  @@index([cartId])
+  @@map("cart_items")
+}
+
+model Order {
+  id              String      @id
+  customerId      String?     @map("customer_id")
+  customerName    String      @map("customer_name")
+  customerEmail   String      @map("customer_email")
+  customerPhone   String?     @map("customer_phone")
+  shippingAddress String      @map("shipping_address")
+  shippingCity    String      @map("shipping_city")
+  shippingState   String?     @map("shipping_state")
+  shippingPostal  String      @map("shipping_postal")
+  shippingCountry String      @map("shipping_country")
+  subtotal        Decimal     @db.Decimal(10, 2)
+  shippingCost    Decimal     @default(0) @map("shipping_cost") @db.Decimal(10, 2)
+  total           Decimal     @db.Decimal(10, 2)
+  status          String      @default("pending")
+  createdAt       DateTime    @default(now()) @map("created_at")
+  updatedAt       DateTime    @updatedAt @map("updated_at")
+  customer        Customer?   @relation(fields: [customerId], references: [id], onDelete: SetNull)
+  items           OrderItem[]
+
+  @@index([customerId])
+  @@index([customerEmail])
+  @@index([status])
+  @@index([createdAt(sort: Desc)])
+  @@map("orders")
+}
+
+model OrderItem {
+  id              String   @id @default(cuid())
+  orderId         String   @map("order_id")
+  productId       String?  @map("product_id")
+  productName     String   @map("product_name")
+  productImage    String   @default("") @map("product_image")
+  productCategory String   @default("") @map("product_category")
+  unitPrice       Decimal  @map("unit_price") @db.Decimal(10, 2)
+  quantity        Int      @default(1)
+  order           Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  product         Product? @relation(fields: [productId], references: [id], onDelete: SetNull)
+
+  @@index([orderId])
+  @@index([productId])
+  @@map("order_items")
+}

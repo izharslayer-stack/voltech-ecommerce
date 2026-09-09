@@ -2,101 +2,110 @@
 
 import { create } from 'zustand';
 import { CustomerUser } from '@/types';
-import { storageGet, storageSet, storageRemove, KEYS } from '@/lib/storage';
 
-// Registered customers are stored as a map of email → { user, passwordHash }
-interface StoredCustomer {
-  user: CustomerUser;
-  password: string; // plain text — demo only, use bcrypt in production
-}
+const TOKEN_KEY = 'voltech_token';
 
-function getCustomers(): Record<string, StoredCustomer> {
-  return storageGet<Record<string, StoredCustomer>>(KEYS.CUSTOMERS, {});
+function getToken(): string | null {
+  if (typeof window === 'undefined') return null;
+  return localStorage.getItem(TOKEN_KEY);
 }
-
-function saveCustomers(customers: Record<string, StoredCustomer>) {
-  storageSet(KEYS.CUSTOMERS, customers);
-}
+function saveToken(t: string) { localStorage.setItem(TOKEN_KEY, t); }
+function clearToken() { localStorage.removeItem(TOKEN_KEY); }
 
 interface CustomerAuthState {
   user: CustomerUser | null;
+  token: string | null;
   isAuthenticated: boolean;
   isLoading: boolean;
   error: string | null;
 
-  init: () => void;
+  init: () => Promise<void>;
   signup: (firstName: string, lastName: string, email: string, password: string) => Promise<boolean>;
   login: (email: string, password: string) => Promise<boolean>;
   logout: () => void;
   clearError: () => void;
 }
 
-export const useCustomerAuthStore = create<CustomerAuthState>((set) => ({
+export const useCustomerAuthStore = create<CustomerAuthState>((set, get) => ({
   user: null,
+  token: null,
   isAuthenticated: false,
   isLoading: false,
   error: null,
 
-  init: () => {
-    const stored = storageGet<CustomerUser | null>(KEYS.CUSTOMER_AUTH, null);
-    if (stored) set({ user: stored, isAuthenticated: true });
+  // Rehydrate from stored JWT on page load
+  init: async () => {
+    const token = getToken();
+    if (!token) return;
+    try {
+      const res = await fetch('/api/auth/me', {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (res.ok) {
+        const user: CustomerUser = await res.json();
+        set({ user, token, isAuthenticated: true });
+      } else {
+        clearToken();
+      }
+    } catch {
+      clearToken();
+    }
   },
 
   signup: async (firstName, lastName, email, password) => {
     set({ isLoading: true, error: null });
-    await new Promise((r) => setTimeout(r, 600));
-
-    const customers = getCustomers();
-    const key = email.toLowerCase();
-
-    if (customers[key]) {
-      set({ error: 'An account with this email already exists.', isLoading: false });
+    try {
+      const res = await fetch('/api/auth/signup', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ firstName, lastName, email, password }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        set({ error: data.error ?? 'Signup failed.', isLoading: false });
+        return false;
+      }
+      saveToken(data.token);
+      set({ user: data.user, token: data.token, isAuthenticated: true, isLoading: false });
+      return true;
+    } catch {
+      set({ error: 'Network error. Please try again.', isLoading: false });
       return false;
     }
-
-    if (password.length < 6) {
-      set({ error: 'Password must be at least 6 characters.', isLoading: false });
-      return false;
-    }
-
-    const user: CustomerUser = {
-      id: `cust_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
-      email: key,
-      firstName: firstName.trim(),
-      lastName: lastName.trim(),
-      createdAt: new Date().toISOString(),
-    };
-
-    customers[key] = { user, password };
-    saveCustomers(customers);
-    storageSet(KEYS.CUSTOMER_AUTH, user);
-
-    set({ user, isAuthenticated: true, isLoading: false });
-    return true;
   },
 
   login: async (email, password) => {
     set({ isLoading: true, error: null });
-    await new Promise((r) => setTimeout(r, 600));
-
-    const customers = getCustomers();
-    const key = email.toLowerCase();
-    const record = customers[key];
-
-    if (!record || record.password !== password) {
-      set({ error: 'Invalid email or password.', isLoading: false });
+    try {
+      const res = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        set({ error: data.error ?? 'Login failed.', isLoading: false });
+        return false;
+      }
+      saveToken(data.token);
+      set({ user: data.user, token: data.token, isAuthenticated: true, isLoading: false });
+      return true;
+    } catch {
+      set({ error: 'Network error. Please try again.', isLoading: false });
       return false;
     }
-
-    storageSet(KEYS.CUSTOMER_AUTH, record.user);
-    set({ user: record.user, isAuthenticated: true, isLoading: false });
-    return true;
   },
 
   logout: () => {
-    storageRemove(KEYS.CUSTOMER_AUTH);
-    set({ user: null, isAuthenticated: false });
+    clearToken();
+    set({ user: null, token: null, isAuthenticated: false });
   },
 
   clearError: () => set({ error: null }),
 }));
+
+// Helper to get auth header for other stores/API calls
+export function getAuthHeader(): Record<string, string> {
+  const token = getToken();
+  return token ? { Authorization: `Bearer ${token}` } : {};
+}

@@ -11,6 +11,7 @@ build/
 # env files
 .env
 .env.local
+.env.production.local
 .env.development.local
 .env.test.local
 .env.production.local
@@ -24,6 +25,13 @@ yarn-error.log*
 .DS_Store
 Thumbs.db
 
-# TypeScript
+# Prisma agent skills (auto-generated)
+.agents/
+.claude/skills/
+.windsurf/skills/
+skills-lock.json
 *.tsbuildinfo
 next-env.d.ts
+.vercel
+
+/src/generated/prisma

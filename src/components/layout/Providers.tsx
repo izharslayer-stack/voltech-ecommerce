@@ -8,11 +8,13 @@ import { useAuthStore } from '@/store/authStore';
 import { useCustomerAuthStore } from '@/store/customerAuthStore';
 
 export default function Providers({ children }: { children: React.ReactNode }) {
-  const initProducts = useProductsStore((s) => s.init);
-  const initCart = useCartStore((s) => s.init);
-  const initOrders = useOrdersStore((s) => s.init);
-  const initAuth = useAuthStore((s) => s.init);
+  const initProducts     = useProductsStore((s) => s.init);
+  const initCart         = useCartStore((s) => s.init);
+  const initOrders       = useOrdersStore((s) => s.init);
+  const fetchMyOrders    = useOrdersStore((s) => s.fetchMyOrders);
+  const initAuth         = useAuthStore((s) => s.init);
   const initCustomerAuth = useCustomerAuthStore((s) => s.init);
+  const isAuthenticated  = useCustomerAuthStore((s) => s.isAuthenticated);
 
   useEffect(() => {
     initProducts();
@@ -20,7 +22,13 @@ export default function Providers({ children }: { children: React.ReactNode }) {
     initOrders();
     initAuth();
     initCustomerAuth();
-  }, [initProducts, initCart, initOrders, initAuth, initCustomerAuth]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Fetch real orders from DB whenever customer logs in
+  useEffect(() => {
+    if (isAuthenticated) fetchMyOrders();
+  }, [isAuthenticated, fetchMyOrders]);
 
   return <>{children}</>;
 }
